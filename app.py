@@ -8,6 +8,7 @@ from typing import Dict, Iterable, List, Optional, Tuple
 
 import streamlit as st
 import pandas as pd
+from html import escape
 
 @dataclass(frozen=True)
 class LogEntry:
@@ -269,9 +270,10 @@ st.markdown(
     """
     <style>
     div.stButton > button { width: 100%; }
-    div[data-testid="stDialog"], div[data-testid="stModal"] { width: 100vw !important; max-width: 3200px !important; }
-    div[data-testid="stDialog"] > div, div[data-testid="stModal"] > div { width: 100% !important; max-width: 3200px !important; }
-    div[data-testid="stDialog"] > div > div, div[data-testid="stModal"] > div > div { resize: both; overflow: auto; max-height: 80vh; }
+    div[role="dialog"] { width: 100vw !important; max-width: 4000px !important; }
+    div[role="dialog"] > div { width: 98vw !important; max-width: 4000px !important; }
+    div[role="dialog"] > div > div { resize: both; overflow: auto; max-height: 90vh; scrollbar-gutter: stable; }
+    div[data-testid="stCodeBlock"] { max-height: 70vh; overflow-y: scroll; scrollbar-gutter: stable; }
     div[data-testid="stCodeBlock"] pre { overflow-x: auto; white-space: pre; }
     ::-webkit-scrollbar { width: 14px; height: 14px; }
     ::-webkit-scrollbar-thumb { background: #888; border-radius: 8px; }
@@ -393,6 +395,7 @@ if rows:
         max_count = max(display_counts) if display_counts else 0
 
         df["View"] = False
+        df = df[["View", "Interval", "Log lines", "First log", "_interval"]]
         if "interval_table_key" not in st.session_state:
             st.session_state["interval_table_key"] = 0
         editor_key = f"interval_table_{st.session_state['interval_table_key']}"
@@ -429,8 +432,24 @@ if rows:
                     if not log_text:
                         st.info("No logs in this interval.")
                     else:
-                        st.code(log_text, language="text")
-                    if st.button("Close"):
+                        st.markdown(
+                            """
+                            <style>
+                            .log-scroll {
+                                max-height: 70vh;
+                                overflow-y: scroll;
+                                overflow-x: auto;
+                                scrollbar-gutter: stable;
+                                border: 1px solid rgba(255,255,255,0.1);
+                                padding: 8px;
+                                white-space: pre;
+                            }
+                            </style>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+                        st.markdown(f"<div class='log-scroll'>{escape(log_text)}</div>", unsafe_allow_html=True)
+                    if st.button("Close", type="primary"):
                         st.session_state["interval_table_key"] += 1
                         st.rerun()
 

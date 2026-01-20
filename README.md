@@ -1,6 +1,6 @@
-# Syslog Interval Visualizer
+# Logging Activity Visualizer
 
-Streamlit UI for chunking Ubuntu `journalctl` logs into fixed time intervals and quickly inspecting each interval.
+Streamlit UI for chunking Ubuntu `journalctl` logs (initially) into fixed time intervals to identify burstiness.  Allows quick inspection of each interval, drilling down to the granularity of individual logs.
 
 <p align="center">
   <img src="media/syslog-visualize.gif" width="900">

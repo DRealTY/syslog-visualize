@@ -1,4 +1,4 @@
-# Syslog Interval Viewer
+# Syslog Interval Visualizer
 
 Streamlit UI for chunking Ubuntu `journalctl` logs into fixed time intervals and quickly inspecting each interval.
 

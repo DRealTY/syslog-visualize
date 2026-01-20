@@ -4,8 +4,6 @@ Streamlit UI for chunking Ubuntu `journalctl` logs into fixed time intervals and
 
 <p align="center">
   <img src="media/syslog-visualize.gif" width="900">
-  <br/>
-  <em>Live XOR training with push-based updates inside Excel</em>
 </p>
 
 ## Features

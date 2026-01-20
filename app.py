@@ -1,3 +1,23 @@
+"""
+Syslog Interval Viewer (Streamlit)
+
+Summary:
+- Queries `journalctl` for a selected date/time range.
+- Chunks logs into fixed-size intervals.
+- Displays first log + count per interval with a View checkbox.
+- Opens a modal with full logs for the selected interval.
+
+Usage:
+1) Pick date range and start/end times in the sidebar.
+2) Set interval seconds (default 10).
+3) Click Fetch logs.
+4) Click the 🔍 checkbox for an interval to open details.
+
+Notes:
+- Requires Linux with systemd/journalctl access.
+- Logs are cached in-session to minimize repeated journalctl calls.
+"""
+
 import json
 import logging
 import re
@@ -10,12 +30,15 @@ import streamlit as st
 import pandas as pd
 from html import escape
 
+# Parsed journal entry with timestamp and derived message.
 @dataclass(frozen=True)
 class LogEntry:
     ts: datetime
     message: str
     cursor: Optional[str]
     raw: Dict
+
+# Fixed interval row with optional first log entry.
 @dataclass(frozen=True)
 class IntervalRow:
     index: int
@@ -24,22 +47,27 @@ class IntervalRow:
     first_log: Optional[LogEntry]
 
 
+# Resolve the system's local timezone for display.
 def local_tz() -> timezone:
     return datetime.now().astimezone().tzinfo  # type: ignore[return-value]
 
 
+# Format a full timestamp for UI display (YYYY-MM-DD + 12-hour time).
 def format_dt(dt: datetime) -> str:
     return dt.astimezone(local_tz()).strftime("%Y-%m-%d %I:%M:%S %p")
 
 
+# Date-only formatting for table labels.
 def format_date(dt: datetime) -> str:
     return dt.astimezone(local_tz()).strftime("%Y-%m-%d")
 
 
+# Time-only formatting for table labels.
 def format_time(dt: datetime) -> str:
     return dt.astimezone(local_tz()).strftime("%I:%M:%S %p")
 
 
+# Build the interval label, suppressing repeated dates for cleaner display.
 def format_interval_label(interval: IntervalRow, last_date: Optional[str]) -> Tuple[str, Optional[str]]:
     start_date = format_date(interval.start)
     end_date = format_date(interval.end)
@@ -57,6 +85,7 @@ def format_interval_label(interval: IntervalRow, last_date: Optional[str]) -> Tu
     return label, end_date
 
 
+# Convert a seconds offset from midnight into a time object.
 def seconds_to_time(total_seconds: int) -> time:
     total_seconds = max(0, min(86399, total_seconds))
     hours = total_seconds // 3600
@@ -65,6 +94,7 @@ def seconds_to_time(total_seconds: int) -> time:
     return time(hours, minutes, seconds)
 
 
+# Clean log text to avoid control chars or non-printable bytes breaking UI rendering.
 def sanitize_text(text: str, max_len: Optional[int] = None) -> str:
     cleaned = re.sub(r"[\x00-\x1f\x7f-\x9f]", " ", text)
     cleaned = "".join(ch if 32 <= ord(ch) <= 126 else " " for ch in cleaned)
@@ -75,6 +105,7 @@ def sanitize_text(text: str, max_len: Optional[int] = None) -> str:
 
 
 
+# Build a readable log message from journal fields.
 def build_message(entry: Dict) -> str:
     parts = []
     if entry.get("SYSLOG_IDENTIFIER"):
@@ -88,6 +119,7 @@ def build_message(entry: Dict) -> str:
     return f"{header}: {msg}" if header else msg
 
 
+# Parse JSON journal entry into LogEntry, returning None if invalid.
 def parse_entry(entry: Dict) -> Optional[LogEntry]:
     ts_raw = entry.get("__REALTIME_TIMESTAMP")
     if not ts_raw:
@@ -100,6 +132,7 @@ def parse_entry(entry: Dict) -> Optional[LogEntry]:
     return LogEntry(ts=ts, message=build_message(entry), cursor=cursor, raw=entry)
 
 
+# Execute journalctl for a time range and parse JSON output.
 def run_journalctl(start: datetime, end: datetime) -> List[LogEntry]:
     start_str = start.astimezone(local_tz()).strftime("%Y-%m-%d %H:%M:%S")
     end_str = end.astimezone(local_tz()).strftime("%Y-%m-%d %H:%M:%S")
@@ -123,6 +156,7 @@ def run_journalctl(start: datetime, end: datetime) -> List[LogEntry]:
     return entries
 
 
+# Merge overlapping/adjacent ranges for cache tracking.
 def merge_ranges(ranges: List[Tuple[datetime, datetime]]) -> List[Tuple[datetime, datetime]]:
     if not ranges:
         return []
@@ -137,6 +171,7 @@ def merge_ranges(ranges: List[Tuple[datetime, datetime]]) -> List[Tuple[datetime
     return merged
 
 
+# Compute missing ranges given requested and already-cached ranges.
 def subtract_ranges(requested: Tuple[datetime, datetime],
                     available: List[Tuple[datetime, datetime]]) -> List[Tuple[datetime, datetime]]:
     req_start, req_end = requested
@@ -162,6 +197,7 @@ def subtract_ranges(requested: Tuple[datetime, datetime],
     return [(s, e) for s, e in missing if s < e]
 
 
+# Merge and dedupe log entries using journal cursor when available.
 def dedupe_entries(entries: Iterable[LogEntry],
                    existing: List[LogEntry],
                    existing_cursors: set) -> List[LogEntry]:
@@ -179,10 +215,12 @@ def dedupe_entries(entries: Iterable[LogEntry],
     return merged
 
 
+# Filter cached entries for the requested range.
 def filter_entries(entries: List[LogEntry], start: datetime, end: datetime) -> List[LogEntry]:
     return [e for e in entries if start <= e.ts <= end]
 
 
+# Build fixed-size interval list between start and end.
 def build_intervals(start: datetime, end: datetime, seconds: int) -> List[IntervalRow]:
     if seconds <= 0:
         return []
@@ -197,6 +235,7 @@ def build_intervals(start: datetime, end: datetime, seconds: int) -> List[Interv
     return intervals
 
 
+# Single-pass interval counting + first-log capture for performance.
 def compute_interval_stats(intervals: List[IntervalRow], entries: List[LogEntry]) -> Tuple[List[int], List[Optional[LogEntry]]]:
     if not intervals:
         return [], []
@@ -215,6 +254,7 @@ def compute_interval_stats(intervals: List[IntervalRow], entries: List[LogEntry]
     return counts, first_logs
 
 
+# Attach the first log to each interval row.
 def assign_first_logs(intervals: List[IntervalRow], first_logs: List[Optional[LogEntry]]) -> List[IntervalRow]:
     updated: List[IntervalRow] = []
     for interval, first in zip(intervals, first_logs):
@@ -222,16 +262,19 @@ def assign_first_logs(intervals: List[IntervalRow], first_logs: List[Optional[Lo
     return updated
 
 
+# Extract all entries for a given interval window.
 def entries_in_interval(entries: List[LogEntry], interval: IntervalRow) -> List[LogEntry]:
     return [e for e in entries if interval.start <= e.ts < interval.end]
 
 
+# Convert datetime to date for date inputs.
 def coerce_date(value) -> date:
     if isinstance(value, datetime):
         return value.date()
     return value
 
 
+# Safely extract a date from nested date input structures.
 def extract_date(value) -> Optional[date]:
     if isinstance(value, date) and not isinstance(value, datetime):
         return value
@@ -242,6 +285,7 @@ def extract_date(value) -> Optional[date]:
     return None
 
 
+# Normalize the date input into (start_date, end_date).
 def normalize_date_range(value) -> Tuple[date, date]:
     if isinstance(value, (list, tuple)) and value:
         start = extract_date(value)
@@ -251,8 +295,10 @@ def normalize_date_range(value) -> Tuple[date, date]:
     return coerce_date(value), coerce_date(value)
 
 
+# Streamlit page layout.
 st.set_page_config(page_title="Syslog Interval Viewer", layout="wide")
 
+# File + console logging for debugging.
 logger = logging.getLogger("syslog_viewer")
 if not logger.handlers:
     logger.setLevel(logging.INFO)
@@ -266,6 +312,7 @@ if not logger.handlers:
     logger.addHandler(file_handler)
     logger.addHandler(stream_handler)
 
+# Global UI tweaks (dialog sizing, scrollbar styling, etc.).
 st.markdown(
     """
     <style>
@@ -283,6 +330,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# Cache fetched logs across runs to avoid re-querying journalctl.
 if "log_cache" not in st.session_state:
     st.session_state.log_cache = {
         "entries": [],
@@ -291,15 +339,19 @@ if "log_cache" not in st.session_state:
     }
     logger.info("Initialized log cache")
 
+# Top-level UI title.
 st.title("Syslog Interval Viewer")
 
+# Sidebar controls.
 with st.sidebar:
     st.header("Query")
     today = datetime.now().date()
+    # Default date range is yesterday -> today.
     if "date_range_input" not in st.session_state:
         st.session_state["date_range_input"] = (today - timedelta(days=1), today)
     date_range = st.date_input("Date range", key="date_range_input")
     cols = st.columns(2)
+    # Quick range handlers.
     def set_date_range(value):
         st.session_state["date_range_input"] = value
 
@@ -307,6 +359,7 @@ with st.sidebar:
     cols[0].button("Yesterday", on_click=set_date_range, args=((yday, yday),))
     cols[1].button("Today", on_click=set_date_range, args=((today, today),))
 
+    # 1-second granularity time selection.
     start_seconds = st.select_slider(
         "Start time",
         options=range(0, 86400),
@@ -321,20 +374,25 @@ with st.sidebar:
     )
     start_time = seconds_to_time(start_seconds)
     end_time = seconds_to_time(end_seconds)
+    # Interval length in seconds (default 10).
     interval_seconds = st.number_input("Interval seconds", min_value=1, value=10, step=1)
     fetch_clicked = st.button("Fetch logs")
 
+# Normalize date range and build timezone-aware datetimes.
 start_date, end_date = normalize_date_range(date_range)
 
 start_dt = datetime.combine(start_date, start_time, tzinfo=local_tz())
 end_dt = datetime.combine(end_date, end_time, tzinfo=local_tz())
 
+# Validate range.
 if end_dt <= start_dt:
     st.error("End time must be after start time.")
     st.stop()
 
+# Local reference to cache for convenience.
 cache = st.session_state.log_cache
 
+# Fetch missing log ranges from journalctl.
 if fetch_clicked:
     requested = (start_dt, end_dt)
     missing = subtract_ranges(requested, cache["ranges"])
@@ -352,8 +410,10 @@ if fetch_clicked:
     cache["ranges"] = merge_ranges(cache["ranges"] + missing)
     logger.info("Cache now has %d entries", len(cache["entries"]))
 
+# Pull relevant cached entries for current range.
 entries_in_range = filter_entries(cache["entries"], start_dt, end_dt)
 
+# Show warnings/errors for empty or partial ranges.
 if fetch_clicked:
     if not entries_in_range:
         logger.warning("No logs found for requested range")
@@ -365,17 +425,21 @@ if fetch_clicked:
         logger.warning("Partial availability for requested range")
         st.warning("Only part of the requested range is available in the journal.")
 
+# Build intervals and compute counts + first log per interval.
 intervals_base = build_intervals(start_dt, end_dt, int(interval_seconds))
 counts, first_logs = compute_interval_stats(intervals_base, entries_in_range)
 intervals = assign_first_logs(intervals_base, first_logs)
 
+# Assemble rows for the interval table UI.
 rows = []
 last_date_label: Optional[str] = None
+# Auto-focus table on the first interval with log activity.
 first_nonzero_idx = next((i for i, c in enumerate(counts) if c > 0), None)
 display_start = first_nonzero_idx if first_nonzero_idx is not None else 0
 display_intervals = intervals[display_start:]
 display_counts = counts[display_start:]
 
+# Format interval display rows.
 for interval, count in zip(display_intervals, display_counts):
     first_log_raw = interval.first_log.message if interval.first_log else "(no logs)"
     first_log = sanitize_text(first_log_raw, max_len=200)
@@ -388,14 +452,17 @@ for interval, count in zip(display_intervals, display_counts):
         "_interval": interval,
     })
 
+# Table view header.
 st.subheader("Intervals")
 
 if rows:
+    # Build editor dataframe with a View checkbox column.
         df = pd.DataFrame(rows)
         max_count = max(display_counts) if display_counts else 0
 
         df["View"] = False
         df = df[["View", "Interval", "Log lines", "First log", "_interval"]]
+        # Changing the widget key resets checkbox state.
         if "interval_table_key" not in st.session_state:
             st.session_state["interval_table_key"] = 0
         editor_key = f"interval_table_{st.session_state['interval_table_key']}"
@@ -418,6 +485,7 @@ if rows:
             key=editor_key,
         )
 
+        # Open modal for the first selected row.
         selected_indices = edited_df.index[edited_df["View"] == True].tolist()
         if selected_indices:
             selected_row = rows[selected_indices[0]]
@@ -425,6 +493,7 @@ if rows:
             interval_logs = entries_in_interval(entries_in_range, selected_interval)
             log_text = "\n".join(sanitize_text(f"{format_dt(e.ts)} | {e.message}") for e in interval_logs)
 
+            # Modal dialog when available, expander fallback otherwise.
             if hasattr(st, "dialog"):
                 @st.dialog("Interval details")
                 def _show_interval_details() -> None:
@@ -449,6 +518,7 @@ if rows:
                             unsafe_allow_html=True,
                         )
                         st.markdown(f"<div class='log-scroll'>{escape(log_text)}</div>", unsafe_allow_html=True)
+                    # Close button clears the checkbox via key increment.
                     if st.button("Close", type="primary"):
                         st.session_state["interval_table_key"] += 1
                         st.rerun()
@@ -462,4 +532,5 @@ if rows:
                     else:
                         st.code(log_text, language="text")
 else:
+    # No intervals to display for the chosen range.
         st.info("No intervals to display.")

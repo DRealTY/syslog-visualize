@@ -167,3 +167,8 @@
 2026-01-19 18:15:11,249 INFO Missing ranges: [('2026-01-08 01:19:59 PM', '2026-01-08 06:39:59 PM')]
 2026-01-19 18:15:11,482 INFO Cache now has 216394 entries
 2026-01-19 18:15:11,667 WARNING No logs found for requested range
+2026-01-19 20:03:35,784 INFO Initialized log cache
+2026-01-19 20:04:07,319 INFO Fetch requested: 2026-01-19 03:40:00 PM -> 2026-01-19 04:45:00 PM
+2026-01-19 20:04:07,320 INFO Missing ranges: [('2026-01-19 03:40:00 PM', '2026-01-19 04:45:00 PM')]
+2026-01-19 20:04:10,672 INFO Cache now has 103067 entries
+2026-01-19 20:04:10,741 WARNING Partial availability for requested range

